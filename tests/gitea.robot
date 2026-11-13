@@ -63,7 +63,13 @@ Add module for ${SCENARIO} scenario
     Set Suite Variable    ${module_id}    ${output.module_id}
 
 Configure module
-    ${configure_data} =    Set Variable    {"host":"${HOST}","http2https":true,"lets_encrypt":false,"setup_mode":"managed"}
+    # The released baseline of the update scenario (1.0.0) does not know
+    # setup_mode: the image under test gets it after the update
+    IF    r'${SCENARIO}' == 'update'
+        ${configure_data} =    Set Variable    {"host":"${HOST}","http2https":true,"lets_encrypt":false}
+    ELSE
+        ${configure_data} =    Set Variable    {"host":"${HOST}","http2https":true,"lets_encrypt":false,"setup_mode":"managed"}
+    END
     ${rc} =    Execute Command    api-cli run module/${module_id}/configure-module --data '${configure_data}'
     ...    return_rc=True    return_stdout=False
     Should Be Equal As Integers    ${rc}    0
@@ -81,6 +87,11 @@ Update module
         Should Be Equal As Integers    ${rc}    0    action update-module ${IMAGE_URL} failed: ${output}
         ${image_url} =    Execute Command    runagent -m ${module_id} printenv IMAGE_URL
         Should Be Equal    ${image_url.strip()}    ${IMAGE_URL}
+        # Save the settings once with the new release, as the admin does from
+        # the Settings page, choosing the managed setup
+        ${rc} =    Execute Command    api-cli run module/${module_id}/configure-module --data '{"host":"${HOST}","http2https":true,"lets_encrypt":false,"setup_mode":"managed"}'
+        ...    return_rc=True    return_stdout=False
+        Should Be Equal As Integers    ${rc}    0
     END
 
 Check web and SSH ports after install or update
