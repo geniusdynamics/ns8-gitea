@@ -158,7 +158,9 @@ Manual setup exposes Gitea web installer
     Should Be Equal As Integers    ${rc}    0
     &{output} =    Evaluate    ast.literal_eval(r'''${output}''')    modules=ast
     ${manual_module_id} =    Set Variable    ${output.module_id}
-    ${rc} =    Execute Command    api-cli run module/${manual_module_id}/configure-module --data '{"host":"${HOST}","http2https":true,"lets_encrypt":false}'
+    # The first instance still holds ${HOST}: give this one its own name, and
+    # ask for the manual setup (configure-module defaults to managed)
+    ${rc} =    Execute Command    api-cli run module/${manual_module_id}/configure-module --data '{"host":"manual.${HOST}","http2https":true,"lets_encrypt":false,"setup_mode":"manual"}'
     ...    return_rc=True    return_stdout=False
     Should Be Equal As Integers    ${rc}    0
     ${manual_web_port} =    Execute Command    runagent -m ${manual_module_id} printenv TCP_PORT
