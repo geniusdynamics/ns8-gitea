@@ -14,14 +14,20 @@ images=()
 repobase="${REPOBASE:-ghcr.io/geniusdynamics}"
 # Configure the image name
 reponame="gitea"
-gitea_version="1.24"
+# renovate: datasource=npm packageName=corepack
+corepack_version=0.36.0
+# Released module: the Gitea and PostgreSQL major versions stay as they are, so
+# updating the module introduces no database migration.
+gitea_version="1.24.7"
+postgres_image="docker.io/postgres:15.20-alpine3.24"
 # Create a new empty container image
 container=$(buildah from scratch)
 
 # Reuse existing nodebuilder-gitea container, to speed up builds
 if ! buildah containers --format "{{.ContainerName}}" | grep -q nodebuilder-gitea; then
 	echo "Pulling NodeJS runtime..."
-	buildah from --name nodebuilder-gitea -v "${PWD}:/usr/src:Z" docker.io/library/node:lts
+	buildah from --name nodebuilder-gitea -v "${PWD}:/usr/src:Z" docker.io/library/node:26.13.0-slim
+	buildah run nodebuilder-gitea sh -c "npm install -g corepack@${corepack_version} && corepack enable"
 fi
 
 echo "Build static UI files with node..."
@@ -42,10 +48,11 @@ buildah add "${container}" ui/dist /ui
 # rootfull=0 === rootless container
 # tcp-ports-demand=1 number of tcp Port to reserve , 1 is the minimum, can be udp or tcp
 buildah config --entrypoint=/ \
-	--label="org.nethserver.authorizations=traefik@node:routeadm" \
-	--label="org.nethserver.tcp-ports-demand=1" \
+	--label="org.nethserver.authorizations=traefik@node:routeadm node:fwadm,portsadm cluster:accountconsumer" \
+	--label="org.nethserver.tcp-ports-demand=2" \
 	--label="org.nethserver.rootfull=0" \
-	--label="org.nethserver.images=docker.io/postgres:15.5-alpine3.19 docker.io/gitea/gitea:$gitea_version" \
+	--label="org.nethserver.min-core=3.2.2" \
+	--label="org.nethserver.images=${postgres_image} docker.io/gitea/gitea:$gitea_version" \
 	"${container}"
 # Commit the image
 buildah commit "${container}" "${repobase}/${reponame}"

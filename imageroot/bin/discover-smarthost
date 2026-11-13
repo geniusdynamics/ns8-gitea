@@ -5,32 +5,92 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-import sys
-import agent
+"""Write the Gitea mailer overrides for the next container start.
+
+Gitea's image persists GITEA__mailer__* variables into app.ini, which lives in
+the backed-up data volume. In managed mode this script therefore always writes
+the complete mailer state: either the NS8 smarthost values, when the user
+enabled that option and the node provides a smarthost, or a disabled mailer
+with blank connection settings. Manual mode leaves the mailer to Gitea.
+"""
+
 import os
+import sys
 
-# Connect the local Redis replica. This is necessary to consistently start
-# the service if the leader node is not reachable:
-rdb = agent.redis_connect(use_replica=True)
-smtp_settings = agent.get_smarthost_settings(rdb)
+import agent
 
-envfile = "smarthost.env"
 
-# Using .tmp suffix: do not overwrite the target file until the new one is
-# saved to disk:
-with open(envfile + ".tmp", "w") as efp:
-    # HINT for gitea: adjust variable names as needed
-    print(f"SMTP_ENABLED={'1' if smtp_settings['enabled'] else ''}", file=efp)
-    print(f"SMTP_HOST={smtp_settings['host']}", file=efp)
-    print(f"SMTP_PORT={smtp_settings['port']}", file=efp)
-    print(f"SMTP_USERNAME={smtp_settings['username']}", file=efp)
-    print(f"SMTP_PASSWORD={smtp_settings['password']}", file=efp)
-    print(f"SMTP_ENCRYPTION={smtp_settings['encrypt_smtp']}", file=efp)
-    print(f"SMTP_TLSVERIFY={'1' if smtp_settings['tls_verify'] else ''}", file=efp)
+SETUP_ENV_FILE = "gitea-setup.env"
+ENV_FILE = "smarthost.env"
+PROTOCOLS = {
+    "none": "smtp",
+    "starttls": "smtp+starttls",
+    "tls": "smtps",
+}
+# Written when mail is off, so no connection data or credentials from an
+# earlier configuration or a restored backup remain in app.ini.
+DISABLED = {
+    "GITEA__mailer__ENABLED": "false",
+    "GITEA__mailer__FROM": "",
+    "GITEA__mailer__PROTOCOL": "",
+    "GITEA__mailer__SMTP_ADDR": "",
+    "GITEA__mailer__SMTP_PORT": "",
+    "GITEA__mailer__USER": "",
+    "GITEA__mailer__PASSWD": "",
+    "GITEA__mailer__FORCE_TRUST_SERVER_CERT": "false",
+}
 
-# Commit changes by replacing the existing envfile:
-os.replace(envfile + ".tmp", envfile)
 
-# NOTE: The generated envfile can be included in the service container
-#       with `podman run --env-file` or in Systemd unit with
-#       `Environment=-%S/state/smarthost.env`
+def parse_bool(value):
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def read_setup():
+    return agent.read_envfile(SETUP_ENV_FILE)
+
+
+def smarthost_config(setup):
+    try:
+        # The local replica allows startup even when the cluster leader is
+        # unavailable.
+        smtp = agent.get_smarthost_settings(agent.redis_connect(use_replica=True))
+    except Exception as error:  # Never keep stale or restored mail settings.
+        print(f"Cannot read the NS8 smarthost settings; Gitea mail stays disabled: {error}", file=sys.stderr)
+        return dict(DISABLED)
+    if not smtp.get("enabled") or not str(smtp.get("host", "")).strip():
+        print("The NS8 smarthost is not configured; Gitea mail stays disabled.", file=sys.stderr)
+        return dict(DISABLED)
+
+    # NS8's own mail sender uses no-reply@hostname. Always supply a valid
+    # address: Gitea otherwise derives FROM from the SMTP username, which
+    # need not be an email address and can prevent Gitea from starting.
+    sender = setup.get("GITEA_MAILER_FROM", "").strip()
+    sender = sender or f"no-reply@{os.environ.get('TRAEFIK_HOST') or 'localhost.invalid'}"
+    encryption = str(smtp.get("encrypt_smtp", "starttls")).lower()
+    return {
+        "GITEA__mailer__ENABLED": "true",
+        "GITEA__mailer__FROM": sender,
+        "GITEA__mailer__PROTOCOL": PROTOCOLS.get(encryption, "smtp+starttls"),
+        "GITEA__mailer__SMTP_ADDR": str(smtp.get("host", "")),
+        "GITEA__mailer__SMTP_PORT": str(smtp.get("port", "")),
+        "GITEA__mailer__USER": str(smtp.get("username", "") or ""),
+        "GITEA__mailer__PASSWD": str(smtp.get("password", "") or ""),
+        "GITEA__mailer__FORCE_TRUST_SERVER_CERT": (
+            "false" if smtp.get("tls_verify", True) else "true"
+        ),
+    }
+
+
+setup = read_setup()
+if setup.get("GITEA_SETUP_MODE", "").strip().lower() != "managed":
+    # Manual and pending instances: Gitea's installer and administrator own
+    # the mailer settings in app.ini.
+    config = {}
+elif parse_bool(setup.get("GITEA_MAIL_SMARTHOST", "false")):
+    config = smarthost_config(setup)
+else:
+    config = dict(DISABLED)
+
+agent.write_envfile(ENV_FILE + ".tmp", config)
+os.chmod(ENV_FILE + ".tmp", 0o600)
+os.replace(ENV_FILE + ".tmp", ENV_FILE)
