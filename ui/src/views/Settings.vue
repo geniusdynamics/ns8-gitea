@@ -61,11 +61,117 @@
                 $t("settings.enabled")
               }}</template>
             </cv-toggle>
-              <!-- advanced options -->
+            <cv-select
+              :label="$t('settings.setup_mode')"
+              v-model="setupMode"
+              class="mg-bottom"
+              :disabled="
+                setupModeLocked ||
+                loading.getConfiguration ||
+                loading.configureModule
+              "
+              :invalid-message="$t(error.setup_mode)"
+              ref="setup_mode"
+            >
+              <cv-select-option value="" disabled>{{
+                $t("settings.choose_setup_mode")
+              }}</cv-select-option>
+              <cv-select-option value="managed">{{
+                $t("settings.setup_mode_managed")
+              }}</cv-select-option>
+              <cv-select-option value="manual">{{
+                $t("settings.setup_mode_manual")
+              }}</cv-select-option>
+            </cv-select>
+            <p v-if="setupModeLocked" class="mg-bottom">
+              {{ $t("settings.setup_mode_locked") }}
+            </p>
             <cv-accordion ref="accordion" class="maxwidth mg-bottom">
-              <cv-accordion-item :open="toggleAccordion[0]">
-                <template slot="title">{{ $t("settings.advanced") }}</template>
+              <cv-accordion-item :open="false">
+                <template slot="title">{{
+                  $t("settings.active_directory")
+                }}</template>
                 <template slot="content">
+                  <cv-toggle
+                    value="adEnabled"
+                    :label="$t('settings.ad_enabled')"
+                    v-model="adEnabled"
+                    :disabled="
+                      setupMode !== 'managed' ||
+                      loading.getConfiguration ||
+                      loading.configureModule
+                    "
+                    class="mg-bottom"
+                  >
+                    <template slot="text-left">{{
+                      $t("settings.disabled")
+                    }}</template>
+                    <template slot="text-right">{{
+                      $t("settings.enabled")
+                    }}</template>
+                  </cv-toggle>
+                  <cv-text-input
+                    :label="$t('settings.ad_domain')"
+                    placeholder="ad.example.org"
+                    v-model.trim="adDomain"
+                    class="mg-bottom"
+                    :invalid-message="$t(error.ad_domain)"
+                    :disabled="
+                      !adEnabled ||
+                      loading.getConfiguration ||
+                      loading.configureModule
+                    "
+                    ref="ad_domain"
+                  ></cv-text-input>
+                  <cv-text-input
+                    :label="$t('settings.ad_user_group')"
+                    v-model.trim="adUserGroup"
+                    class="mg-bottom"
+                    :disabled="
+                      !adEnabled ||
+                      loading.getConfiguration ||
+                      loading.configureModule
+                    "
+                  ></cv-text-input>
+                  <cv-text-input
+                    :label="$t('settings.ad_admin_group')"
+                    v-model.trim="adAdminGroup"
+                    class="mg-bottom"
+                    :disabled="
+                      !adEnabled ||
+                      loading.getConfiguration ||
+                      loading.configureModule
+                    "
+                  ></cv-text-input>
+                  <cv-text-input
+                    :label="$t('settings.ad_user_search_base')"
+                    placeholder="CN=Users,DC=ad,DC=example,DC=org"
+                    v-model.trim="adUserSearchBase"
+                    class="mg-bottom"
+                    :disabled="
+                      !adEnabled ||
+                      loading.getConfiguration ||
+                      loading.configureModule
+                    "
+                  ></cv-text-input>
+                  <cv-toggle
+                    value="adNested"
+                    :label="$t('settings.ad_nested_groups')"
+                    v-model="adNestedGroups"
+                    :disabled="
+                      !adEnabled ||
+                      loading.getConfiguration ||
+                      loading.configureModule
+                    "
+                    class="mg-bottom"
+                  >
+                    <template slot="text-left">{{
+                      $t("settings.disabled")
+                    }}</template>
+                    <template slot="text-right">{{
+                      $t("settings.enabled")
+                    }}</template>
+                  </cv-toggle>
                 </template>
               </cv-accordion-item>
             </cv-accordion>
@@ -125,6 +231,14 @@ export default {
       host: "",
       isLetsEncryptEnabled: false,
       isHttpToHttpsEnabled: true,
+      setupMode: "",
+      setupModeLocked: false,
+      adEnabled: false,
+      adDomain: "",
+      adUserGroup: "gitea-user",
+      adAdminGroup: "gitea-admin",
+      adUserSearchBase: "",
+      adNestedGroups: false,
       loading: {
         getConfiguration: false,
         configureModule: false,
@@ -135,6 +249,8 @@ export default {
         host: "",
         lets_encrypt: "",
         http2https: "",
+        setup_mode: "",
+        ad_domain: "",
       },
     };
   },
@@ -202,6 +318,18 @@ export default {
       this.host = config.host;
       this.isLetsEncryptEnabled = config.lets_encrypt;
       this.isHttpToHttpsEnabled = config.http2https;
+      this.setupMode =
+        config.setup_mode === "managed" || config.setup_mode === "manual"
+          ? config.setup_mode
+          : "";
+      // the mode cannot be changed once the instance has been configured
+      this.setupModeLocked = this.setupMode !== "";
+      this.adEnabled = config.ad_enabled;
+      this.adDomain = config.ad_domain;
+      this.adUserGroup = config.ad_user_group;
+      this.adAdminGroup = config.ad_admin_group;
+      this.adUserSearchBase = config.ad_user_search_base;
+      this.adNestedGroups = config.ad_nested_groups;
 
       this.loading.getConfiguration = false;
       this.focusElement("host");
@@ -215,6 +343,20 @@ export default {
 
         if (isValidationOk) {
           this.focusElement("host");
+        }
+        isValidationOk = false;
+      }
+      if (!this.setupMode) {
+        this.error.setup_mode = "common.required";
+        if (isValidationOk) {
+          this.focusElement("setup_mode");
+        }
+        isValidationOk = false;
+      }
+      if (this.adEnabled && !this.adDomain) {
+        this.error.ad_domain = "common.required";
+        if (isValidationOk) {
+          this.focusElement("ad_domain");
         }
         isValidationOk = false;
       }
@@ -236,8 +378,6 @@ export default {
       }
     },
     async configureModule() {
-      this.error.test_imap = false;
-      this.error.test_smtp = false;
       const isValidationOk = this.validateConfigureModule();
       if (!isValidationOk) {
         return;
@@ -271,6 +411,13 @@ export default {
             host: this.host,
             lets_encrypt: this.isLetsEncryptEnabled,
             http2https: this.isHttpToHttpsEnabled,
+            setup_mode: this.setupMode,
+            ad_enabled: this.adEnabled,
+            ad_domain: this.adDomain,
+            ad_user_group: this.adUserGroup,
+            ad_admin_group: this.adAdminGroup,
+            ad_user_search_base: this.adUserSearchBase,
+            ad_nested_groups: this.adNestedGroups,
           },
           extra: {
             title: this.$t("settings.instance_configuration", {

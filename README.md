@@ -126,10 +126,7 @@ podman exec -ti   gitea-app sh
 ```
 ## Testing
 
-Test the module using the `test-module.sh` script:
-
-
-    ./test-module.sh <NODE_ADDR> ghcr.io/geniusdynamics/gitea:latest
+The `Test module` workflow installs the image on a QEMU NS8 node and runs the suite in `tests/`. To run it locally, follow the [ns8-github-actions README](https://github.com/NethServer/ns8-github-actions/blob/v1/README.md#running-tests-locally).
 
 The tests are made using [Robot Framework](https://robotframework.org/)
 

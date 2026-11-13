@@ -1,9 +1,12 @@
 {
   "name": "gitea",
   "description": {
-    "en": "Brings teams and developers high-efficiency but easy operations from planning to production."
+    "en": "Brings teams and developers high-efficiency but easy operations from planning to production.",
+    "it": "Gitea offre hosting Git leggero con issue, pull request, CI e registri dei pacchetti."
   },
-  "categories": [],
+  "categories": [
+    "development"
+  ],
   "authors": [
     {
       "name": "Kemboi Elvis",
