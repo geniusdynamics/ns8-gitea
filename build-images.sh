@@ -18,7 +18,8 @@ reponame="gitea"
 corepack_version=0.36.0
 # Released module: the Gitea and PostgreSQL major versions stay as they are, so
 # updating the module introduces no database migration.
-gitea_version="1.24.7"
+# renovate: datasource=docker packageName=docker.io/gitea/gitea
+gitea_version=1.24.7
 postgres_image="docker.io/postgres:15.20-alpine3.24"
 # Create a new empty container image
 container=$(buildah from scratch)
