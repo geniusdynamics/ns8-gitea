@@ -1,0 +1,29 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+#
+# Earlier releases set GITEA__server__PUBLIC_URL_DETECTION=never. The Gitea
+# image writes GITEA__* variables into app.ini at start, so the value stays
+# in app.ini after it left gitea.env, and Gitea 1.24 refuses to start:
+# "Invalid PUBLIC_URL_DETECTION value: never". Remove it from app.ini, with
+# Gitea stopped. Safe to run again: it does nothing when the line is gone.
+#
+
+set -e
+exec 1>&2
+
+podman volume exists gitea-app || exit 0
+
+podman run --rm --network=none --user 0 --entrypoint /bin/sh \
+    --volume gitea-app:/data/:Z \
+    "${GITEA_IMAGE:?}" -c '
+ini=/data/gitea/conf/app.ini
+if [ -f "$ini" ] && grep -Eq "^PUBLIC_URL_DETECTION[[:space:]]*=[[:space:]]*never" "$ini"; then
+    sed -i -E "/^PUBLIC_URL_DETECTION[[:space:]]*=[[:space:]]*never/d" "$ini"
+    echo "Removed PUBLIC_URL_DETECTION = never from app.ini (Gitea 1.24 does not support it)"
+fi
+'
