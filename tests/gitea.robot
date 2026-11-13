@@ -3,10 +3,9 @@ Library    SSHLibrary
 Library    String
 
 *** Variables ***
-${IMAGE_URL}         ghcr.io/platypuschan/gitea:latest
-# The update scenario starts from the last published release of this module;
-# test-module-update.sh looks it up in the registry.
-${BASELINE_IMAGE}    ${EMPTY}
+${IMAGE_URL}         ghcr.io/geniusdynamics/gitea:latest
+# The update scenario starts from the image of the released module (main)
+${BASELINE_IMAGE}    ghcr.io/geniusdynamics/gitea:latest
 ${SCENARIO}          install
 ${HOST}    gitea.example.org
 ${MANUAL_HOST}       gitea-manual.test
@@ -65,7 +64,7 @@ Add module for ${SCENARIO} scenario
 
 Configure module
     ${configure_data} =    Set Variable    {"host":"${HOST}","http2https":true,"lets_encrypt":false,"setup_mode":"managed"}
-    ${rc} =    Execute Command    api-cli run module/${module_id}/configure-module --data '{"host":"${HOST}","http2https":true,"lets_encrypt":false}'
+    ${rc} =    Execute Command    api-cli run module/${module_id}/configure-module --data '${configure_data}'
     ...    return_rc=True    return_stdout=False
     Should Be Equal As Integers    ${rc}    0
     ${port} =    Execute Command    runagent -m ${module_id} printenv TCP_PORT
