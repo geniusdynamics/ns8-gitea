@@ -14,6 +14,8 @@ images=()
 repobase="${REPOBASE:-ghcr.io/geniusdynamics}"
 # Configure the image name
 reponame="gitea"
+# renovate: datasource=npm packageName=corepack
+corepack_version=0.36.0
 # Released module: the Gitea and PostgreSQL major versions stay as they are, so
 # updating the module introduces no database migration.
 gitea_version="1.24.7"
@@ -25,6 +27,7 @@ container=$(buildah from scratch)
 if ! buildah containers --format "{{.ContainerName}}" | grep -q nodebuilder-gitea; then
 	echo "Pulling NodeJS runtime..."
 	buildah from --name nodebuilder-gitea -v "${PWD}:/usr/src:Z" docker.io/library/node:26.13.0-slim
+	buildah run nodebuilder-gitea sh -c "npm install -g corepack@${corepack_version} && corepack enable"
 fi
 
 echo "Build static UI files with node..."
