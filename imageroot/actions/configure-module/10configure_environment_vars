@@ -100,11 +100,12 @@ try:
 except FileNotFoundError:
     gitea = {}
 
+# PUBLIC_URL_DETECTION=never needs Gitea 1.25; Gitea 1.24 refuses to start with it
+gitea.pop("GITEA__server__PUBLIC_URL_DETECTION", None)
 gitea.update(
     {
         "GITEA__server__DOMAIN": host,
         "GITEA__server__ROOT_URL": f"https://{host}/",
-        "GITEA__server__PUBLIC_URL_DETECTION": "never",
         "GITEA__server__DISABLE_SSH": "false",
         "GITEA__server__SSH_DOMAIN": host,
         # The container listens on 22; this is the externally allocated NS8 port.

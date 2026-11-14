@@ -1,0 +1,14 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Before 20restart: Gitea 1.24 refuses to start with settings that earlier
+# releases wrote to app.ini (see bin/drop-unsupported-gitea-settings). An
+# instance that still has them cannot run, so Gitea needs no stop here.
+
+set -e
+exec 1>&2
+drop-unsupported-gitea-settings
