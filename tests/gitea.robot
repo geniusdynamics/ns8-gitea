@@ -5,7 +5,9 @@ Library    String
 *** Variables ***
 ${IMAGE_URL}         ghcr.io/geniusdynamics/gitea:latest
 # The update scenario starts from the image of the released module (main)
-${BASELINE_IMAGE}    ghcr.io/geniusdynamics/gitea:latest
+# The update scenario starts from the last release, what installed instances
+# run, not from the latest main build
+${BASELINE_IMAGE}    ghcr.io/geniusdynamics/gitea:1.0.0
 ${SCENARIO}          install
 ${HOST}    gitea.example.org
 ${MANUAL_HOST}       gitea-manual.test
