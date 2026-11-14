@@ -16,6 +16,13 @@
 set -e
 exec 1>&2
 
+# The image writes the GITEA__* variables of gitea.env into app.ini at every
+# start: drop the setting there first, or it comes back
+if [ -f gitea.env ] && grep -q '^GITEA__server__PUBLIC_URL_DETECTION=' gitea.env; then
+    sed -i '/^GITEA__server__PUBLIC_URL_DETECTION=/d' gitea.env
+    echo "Removed GITEA__server__PUBLIC_URL_DETECTION from gitea.env"
+fi
+
 podman volume exists gitea-app || exit 0
 
 podman run --rm --network=none --user 0 --entrypoint /bin/sh \
